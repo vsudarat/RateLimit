@@ -1,0 +1,48 @@
+package com.agoda.ratelimit
+
+import akka.actor.Actor
+import spray.routing._
+import spray.http._
+import MediaTypes._
+
+// we don't implement our route structure directly in the service actor because
+// we want to be able to test it independently, without having to spin up an actor
+class RateLimitServiceActor extends Actor with RateLimitService {
+
+  // the HttpService trait defines only one abstract member, which
+  // connects the services environment to the enclosing actor or test
+  def actorRefFactory = context
+
+  // this actor only runs our route, but you could add
+  // other things here, like request stream processing
+  // or timeout handling
+  def receive = runRoute(myRoute)
+
+
+}
+
+
+// this trait defines our service behavior independently from the service actor
+trait RateLimitService extends HttpService {
+
+  import spray.httpx.SprayJsonSupport._
+  import MyJsonProtocol._
+
+  def getHotel(cityID: String, ordering: String): List[Hotel] = {
+    new RateDB().get(cityID, ordering)
+  }
+
+  val myRoute =
+    pathPrefix("hotels") {
+      path(Segment) { cityID =>
+        get {
+          parameters('order.?) { (ordering) =>
+            respondWithMediaType(`application/json`) {
+              complete(getHotel(cityID, ordering.getOrElse("")))
+            }
+          }
+        }
+      }
+    }
+
+}
